@@ -75,7 +75,7 @@ fn add(service: &TrackerService) -> Result<()> {
         kind: prompt_default("Account type [investment]: ", "investment")?,
         balance_gbp: amount("Current balance [£]: ")?,
         ownership_percent: 100.0,
-        subcategory: prompt_default("Subcategory [general]: ", "general")?,
+        subcategory: choose_subcategory(service, "general")?,
     };
     let account = service.create_account(request)?;
     println!(
@@ -117,10 +117,7 @@ fn update(service: &TrackerService, args: &[String]) -> Result<()> {
         &format!("New balance [£{}]: ", format_amount(account.balance_gbp)),
         account.balance_gbp,
     )?;
-    let subcategory = prompt_default(
-        &format!("Subcategory [{}]: ", account.subcategory),
-        &account.subcategory,
-    )?;
+    let subcategory = choose_subcategory(service, &account.subcategory)?;
     let account = service.update_account(
         &id,
         UpdateAccount {
@@ -161,6 +158,29 @@ fn choose_account_id(service: &TrackerService) -> Result<String> {
         .get(choice.saturating_sub(1))
         .map(|account| account.id.clone())
         .ok_or_else(|| Error::Validation("account choice is out of range".into()))
+}
+
+fn choose_subcategory(service: &TrackerService, default: &str) -> Result<String> {
+    let subcategories = service.subcategories(false)?;
+    if subcategories.is_empty() {
+        return prompt_default(&format!("Subcategory [{default}]: "), default);
+    }
+
+    println!("Select a subcategory (press Enter for '{default}'):");
+    for (index, subcategory) in subcategories.iter().enumerate() {
+        println!("  {:>3}. {}", index + 1, subcategory.name);
+    }
+    let choice = prompt("Choice: ")?;
+    if choice.is_empty() {
+        return Ok(default.to_string());
+    }
+    let index = choice
+        .parse::<usize>()
+        .map_err(|_| Error::Validation("enter a subcategory number".into()))?;
+    subcategories
+        .get(index.saturating_sub(1))
+        .map(|subcategory| subcategory.name.clone())
+        .ok_or_else(|| Error::Validation("subcategory choice is out of range".into()))
 }
 fn archive(service: &TrackerService, args: &[String]) -> Result<()> {
     let id = args
