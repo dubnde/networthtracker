@@ -162,13 +162,26 @@ fn choose_account_id(service: &TrackerService) -> Result<String> {
 
 fn choose_subcategory(service: &TrackerService, default: &str) -> Result<String> {
     let subcategories = service.subcategories(false)?;
-    if subcategories.is_empty() {
+    let accounts = service.accounts(AccountQuery {
+        include_archived: false,
+    })?;
+    let mut names: Vec<String> = subcategories
+        .into_iter()
+        .map(|subcategory| subcategory.name)
+        .collect();
+    for account in accounts {
+        if !account.subcategory.is_empty() && !names.contains(&account.subcategory) {
+            names.push(account.subcategory);
+        }
+    }
+
+    if names.is_empty() {
         return prompt_default(&format!("Subcategory [{default}]: "), default);
     }
 
     println!("Select a subcategory (press Enter for '{default}'):");
-    for (index, subcategory) in subcategories.iter().enumerate() {
-        println!("  {:>3}. {}", index + 1, subcategory.name);
+    for (index, name) in names.iter().enumerate() {
+        println!("  {:>3}. {}", index + 1, name);
     }
     let choice = prompt("Choice: ")?;
     if choice.is_empty() {
@@ -177,9 +190,9 @@ fn choose_subcategory(service: &TrackerService, default: &str) -> Result<String>
     let index = choice
         .parse::<usize>()
         .map_err(|_| Error::Validation("enter a subcategory number".into()))?;
-    subcategories
+    names
         .get(index.saturating_sub(1))
-        .map(|subcategory| subcategory.name.clone())
+        .cloned()
         .ok_or_else(|| Error::Validation("subcategory choice is out of range".into()))
 }
 fn archive(service: &TrackerService, args: &[String]) -> Result<()> {
