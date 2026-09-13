@@ -1,0 +1,4 @@
+{
+  "name": "fitracker",
+  "storage_path": "data/fitracker.sqlite3"
+}
