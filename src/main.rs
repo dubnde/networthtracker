@@ -107,10 +107,11 @@ fn list(service: &TrackerService, args: &[String]) -> Result<()> {
     Ok(())
 }
 fn update(service: &TrackerService, args: &[String]) -> Result<()> {
-    let id = args
-        .first()
-        .cloned()
-        .ok_or_else(|| Error::Validation("usage: update <account-id>".into()))?;
+    let id = if let Some(id) = args.first() {
+        id.clone()
+    } else {
+        choose_account_id(service)?
+    };
     let account = service.account(&id)?;
     let balance = prompt_amount_default(
         &format!("New balance [£{}]: ", format_amount(account.balance_gbp)),
@@ -133,6 +134,33 @@ fn update(service: &TrackerService, args: &[String]) -> Result<()> {
         format_amount(account.balance_gbp)
     );
     Ok(())
+}
+
+fn choose_account_id(service: &TrackerService) -> Result<String> {
+    let accounts = service.accounts(AccountQuery {
+        include_archived: false,
+    })?;
+    if accounts.is_empty() {
+        return Err(Error::Validation("no active accounts found".into()));
+    }
+
+    println!("Select an account to update:");
+    for (index, account) in accounts.iter().enumerate() {
+        println!(
+            "  {:>3}. {:<32} {}",
+            index + 1,
+            account.name,
+            format_currency("£", account.balance_gbp)
+        );
+    }
+
+    let choice = required("Choice: ")?
+        .parse::<usize>()
+        .map_err(|_| Error::Validation("enter an account number".into()))?;
+    accounts
+        .get(choice.saturating_sub(1))
+        .map(|account| account.id.clone())
+        .ok_or_else(|| Error::Validation("account choice is out of range".into()))
 }
 fn archive(service: &TrackerService, args: &[String]) -> Result<()> {
     let id = args
